@@ -55,54 +55,52 @@ class Interface(BasicRevert, BaseInterface):
         super(Interface, self).__init__(**kwargs)
         # Use default pin factory.
         self.pin_factory = None
-        self.config_dict = None
         self.driver_path = None
-        # GPIO registers are of non-standard datatypes, so override existing register type dictionary
-        self.registers = {
-            ('output', False): [],
-            ('digital_output', False): [],
-            ('digital_input', True): []
-        }
+        self.config = {}
 
     def configure(self, config_dict, registry_config_str):
         """
         Parse driver configuration to establish the pin factory and remote address of the GPIO pins if provided.
-        :param config_dict: Dictionary containing configuration information.
+        :param config: Dictionary containing configuration information.
         :param registry_config_str: List of dictionaries containing point information used to establish registers.
         """
-        self.config_dict = config_dict
+        # Update configuration with config dictionary.
+        self.config.update(config_dict)
         # Set Device Path for callbacks
-        self.driver_path = config_dict.get("driver_path")
+        self.driver_path = self.config.get("driver_path")
 
         # If a remote address is specified set the pin factory to PiGPIO using the address.
-        if config_dict.get("remote_address"):
+        if self.config.get("remote_address"):
             try:
-                ip(config_dict["remote_address"])
+                ip(self.config["remote_address"])
             except Exception as e:
                 raise ValueError("Invalid value provided for 'remote_address,' a valid ip address is required.")
             # Try to set pin_factory and connect to the remote PiGPIO daemon.
             try:
-                self.pin_factory = PiGPIOFactory(host=self.config_dict["remote_address"])
+                self.pin_factory = PiGPIOFactory(host=self.self.config["remote_address"])
             except Exception as e:
                 logging.warning("Failed to connect to PiGPIO daemon on remote device. Trying again...")
                 # Try a second time to connect to the remote PiGPIO daemon.
                 try:
-                    self.pin_factory = PiGPIOFactory(host=self.config_dict["remote_address"])
+                    self.pin_factory = PiGPIOFactory(host=self.self.config["remote_address"])
                 except:
                     raise IOError("Failed to connect to PiGPIO daemon on remote device.")
-            if config_dict.get("pin_factory"):
+            if self.config.get("pin_factory"):
                 raise ValueError("If a remote address is specified, the PiGPIO factory must be used.")
         # Check if a valid pin factory is specified
-        elif config_dict.get("pin_factory"):
-            if config_dict["pin_factory"].lower() == "mock":
+        elif self.config.get("pin_factory"):
+            if self.config["pin_factory"].lower() == "mock":
                 self.pin_factory = MockFactory()
-            elif config_dict["pin_factory"].lower() == "rpi.gpio":
+            elif self.config["pin_factory"].lower() == "rpi.gpio":
                 # This is the default pin factory.
                 import RPi.GPIO
-            elif config_dict["pin_factory"].lower() == "pigpio":
+            elif self.config["pin_factory"].lower() == "pigpio":
                 self.pin_factory = PiGPIOFactory()
-            elif config_dict["pin_factory"].lower() == "native":
+            elif self.config["pin_factory"].lower() == "native":
                 self.pin_factory = NativeFactory()
+            else:
+                raise ValueError("Invalid input for 'pin_factory,' valid options include: 'mock,' 'rpi.gpio,' " +
+                                 "'pigpio,' or 'native.'")
         # Parse registry config and create specified registers.
         self.parse_config(registry_config_str)
 
@@ -111,8 +109,10 @@ class Interface(BasicRevert, BaseInterface):
         The registry configuration csv is parsed and the specified registers are inserted.
         :param registry_config_str: List of dictionaries used to construct registers.
         """
-        if not self.config_dict:
+        # Return if no registry config provided.
+        if registry_config_str is None:
             return
+
         # Loop through register information and construct registers.
         for index, reg in enumerate(registry_config_str):
             # Check the values required for all device types.
@@ -132,17 +132,12 @@ class Interface(BasicRevert, BaseInterface):
             # Pin value must be a valid BroadCom gpio pin value.
             try:
                 reg["Pin"] = int(reg["Pin"])
-            except:
-                raise ValueError(
-                    "Registry config entry {} provided an invalid pin. A valid Broadcom pin number is required.".format(
-                        index)
-                )
-                continue
-            if int(reg["Pin"]) < 2 or int(reg["Pin"]) > 27:
-                raise ValueError(
-                    "Registry config entry {} provided an invalid pin. A valid Broadcom pin number is required.".format(
-                        index)
-                )
+                # Broadcom pin numbers range from 2 to 27
+                if reg["Pin"] < 2 or reg["Pin"] > 27:
+                    raise ValueError()
+            except Exception as e:
+                raise ValueError(("Registry config entry {} provided an invalid pin number. A valid Broadcom pin " +
+                                  "number should be provided as an integer between 2 to 27 (inclusive).").format(index))
                 continue
 
             # Check for optional arguments.
@@ -169,7 +164,7 @@ class Interface(BasicRevert, BaseInterface):
                 logging.warning("Registry config entry {} provided no 'Device Type,' default type 'output' used.")
 
             # Insert digital input GPIO registers.
-            if reg["Device Type"] == "digital_input":
+            if reg["Device Type"].lower() == "digital_input":
                 # Validate bounce time config.
                 if reg.get("Bounce Time") is None:
                     logging.warning(("Registry config entry {} provided no value for 'Bounce Time,' no bounce " + \
@@ -182,7 +177,7 @@ class Interface(BasicRevert, BaseInterface):
                                           "float is required").format(index))
 
                 # Validate pull up and active high config.
-                if not (reg.get("Pull Up") is None):
+                if reg.get("Pull Up") is not None:
                     if str(reg["Pull Up"]).lower() != "true" and str(reg["Pull Up"]).lower() != "false":
                         raise ValueError(("Registry config entry {} provided invalid value for 'Pull Up,' " +
                                           "true or false is required").format(index))
@@ -211,7 +206,7 @@ class Interface(BasicRevert, BaseInterface):
                                                           description=description))
 
             # Insert digital and generic output GPIO registers.
-            elif reg["Device Type"] == "output" or reg["Device Type"] == "digital_output":
+            elif reg["Device Type"].lower() == "output" or reg["Device Type"].lower() == "digital_output":
                 # Validate configuration values.
                 if reg.get("Active High") is None:
                     raise ValueError("Registry config entry {} provided no value for 'Active High.'".format(index))
@@ -238,6 +233,9 @@ class Interface(BasicRevert, BaseInterface):
                     self.insert_register(DigitalOutputRegister(reg["Point Name"], reg["Pin"], reg["Active High"],
                                                                reg["Initial Value"], pin_factory=self.pin_factory,
                                                                units=units, description=description))
+            else:
+                raise ValueError("Invalid device type provided, device type must be: 'digital input,' 'output,' or " +
+                                 "'digital output.'")
 
     def get_point(self, point_name):
         """
@@ -262,6 +260,11 @@ class Interface(BasicRevert, BaseInterface):
             return register.action(value)
         # If value is not a dictionary, the register needs to not be writable.
         elif not register.read_only:
+            try:
+                register.python_type(value)
+            except Exception as e:
+                raise ValueError("Invalid value provided to set point, a {} must be provided".format(
+                    register.python_type))
             register._set_state(value)
         else:
             raise IOError("Cannot write to a point configured as read only.")
@@ -273,9 +276,9 @@ class Interface(BasicRevert, BaseInterface):
         """
         result = {}
         # Get list of read only registers.
-        read_registers = self.get_registers_by_type("digital_input", True)
+        read_registers = self.get_registers_by_type("byte", True)
         # Get list of writable registers.
-        write_registers = self.get_registers_by_type("output", False) + self.get_registers_by_type("digital_output", False)
+        write_registers = self.get_registers_by_type("byte", False) + self.get_registers_by_type("byte", False)
         # Combine register lists into a dictionary.
         for register in read_registers + write_registers:
             result[register.point_name] = register.get_state()
@@ -291,9 +294,10 @@ class GPIOregister(BaseRegister):
     :param units: Units of the point value.
     :param description: Description of the point.
     """
-    def __init__(self, reg_type, read_only, pointName, units, description=''):
+    def __init__(self, read_only, pointName, units, description=''):
+        self.python_type = float
         self.point_name = pointName
-        super(GPIOregister, self).__init__(reg_type, read_only, pointName, units, description=description)
+        super(GPIOregister, self).__init__("byte", read_only, pointName, units, description=description)
 
     def get_state(self):
         """
@@ -340,15 +344,15 @@ class DigitalInputRegister(GPIOregister):
         self.pin = pin
         # Construct GPIO device.
         self.device = DigitalInputDevice(pin, pull_up, active_state, bounce_time, pin_factory=pin_factory)
-        super(DigitalInputRegister, self).__init__("digital_input", True, pointName, units, description=description)
+        super(DigitalInputRegister, self).__init__(True, pointName, units, description=description)
 
     def push_cov_to_master(self):
         """
         Helper function for performing a callback that publishes to the message bus.
         :return: None
         """
-        self.driver.vip.pubsub.publish(peer="pubsub", topic="devices/"+self.driver.driver_path+"/"+self.point_name,
-                                       message="Active.")
+        self.driver.vip.rpc.call('platform.driver', 'forward_bacnet_cov_value', self.driver.driver_path,
+                                 self.point_name, {self.point_name: self.device.value})
 
     def action(self, action_dictionary):
         """
@@ -415,7 +419,7 @@ class OutputRegister(GPIOregister):
     def __init__(self, pointName, pin, active_high, initial_value, pin_factory, units, description=''):
         # Construct GPIO device.
         self.device = OutputDevice(pin, active_high, initial_value, pin_factory=pin_factory)
-        super(OutputRegister, self).__init__("output", False, pointName, units, description=description)
+        super(OutputRegister, self).__init__(False, pointName, units, description=description)
 
     def action(self, action_dictionary):
         """
@@ -470,7 +474,7 @@ class DigitalOutputRegister(GPIOregister):
     def __init__(self, pointName, pin, active_high, initial_value, pin_factory, units, default_value=None, description=''):
         # Construct GPIO device.
         self.device = DigitalOutputDevice(pin, active_high, initial_value, pin_factory=pin_factory)
-        super(DigitalOutputRegister, self).__init__("digital_output", False, pointName, units, description=description)
+        super(DigitalOutputRegister, self).__init__(False, pointName, units, description=description)
 
     def action(self, action_dictionary):
         """

@@ -71,7 +71,7 @@ The configuration works as follows:
 
     Point Name - Name of a point as a user would like it to be referenced and displayed by Volttron.
 
-    Pin - The broadcom pin number of the GPIO pin the device is connected to.
+    Pin - The Broadcom pin number of the GPIO pin the device is connected to.
 
     Device Type - The type of device connected to the referenced GPIO pin. The three options are digital_input, output,
     and digital_output. These correspond to the gpiozero library classes: DigitalInputDevice, OutputDevice,
@@ -140,7 +140,16 @@ The following is an example publish:
 
 ::
 
-    '{"Solenoid": 0, "flowSensor": 0, "flowLED": 0, "abortButton": 0}'
+    [{'Solenoid': 0,
+      'abortButton': 0,
+      'flowLED': 0,
+      'flowSensor': 0,
+      'sensorPoint': 0},
+     {'Solenoid': {'type': 'integer', 'tz': 'UTC', 'units': None},
+      'abortButton': {'type': 'integer', 'tz': 'UTC', 'units': None},
+      'flowLED': {'type': 'integer', 'tz': 'UTC', 'units': None},
+      'flowSensor': {'type': 'integer', 'tz': 'UTC', 'units': None},
+      'sensorPoint': {'type': 'integer', 'tz': 'UTC', 'units': None}}]
 
 get_point
 ^^^^^^^^^

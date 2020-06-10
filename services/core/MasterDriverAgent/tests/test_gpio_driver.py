@@ -40,6 +40,7 @@ import time
 import logging
 import threading
 import pytest
+import json
 from  gpiozero.pins.mock import MockFactory
 from services.core.MasterDriverAgent.master_driver.interfaces.gpio import Interface
 
@@ -57,36 +58,30 @@ config_dict = {"pin_factory": "mock"}
 # flowLED,13,output,TRUE,TRUE,,
 # abortButton,16,digital_input,,,FALSE,
 
-registry_config_str = [
-    {
-        "Point Name": "Solenoid",
-        "Pin": 24,
-        "Device Type": "output",
-        "Active High": "TRUE",
-        "Initial Value": "TRUE",
-        "Pull Up": None,
-        "Bounce Time": None
-    },
-    {
-        "Point Name": "flowSensor",
-        "Pin": 12,
-        "Device Type": "digital_input",
-        "Pull Up": "TRUE"
-    },
-    {
-        "Point Name": "flowLED",
-        "Pin": 13,
-        "Device Type": "digital_output",
-        "Active High": "TRUE",
-        "Initial Value": "TRUE"
-    },
-    {
-        "Point Name": "abortButton",
-        "Pin": 16,
-        "Device Type": "digital_input",
-        "Pull Up": "FALSE"
-    }
-]
+registry_config_str = '[{"Point Name": "Solenoid",' + \
+                        '"Pin": 24,' + \
+                        '"Device Type": "output",' + \
+                        '"Active High": "TRUE",' + \
+                        '"Initial Value": "TRUE"' + \
+                        '},' + \
+                        '{"Point Name": "flowSensor",' + \
+                         '"Pin": 12,' + \
+                         '"Device Type": "digital_input",' + \
+                         '"Pull Up": "TRUE"' + \
+                        '},' + \
+                        '{"Point Name": "flowLED",' + \
+                         '"Pin": 13,' + \
+                         '"Device Type": "digital_output",' + \
+                         '"Active High": "TRUE",' + \
+                        '"Initial Value": "TRUE"' + \
+                        '},' + \
+                        '{"Point Name": "abortButton",' + \
+                         '"Pin": 16,' + \
+                         '"Device Type": "digital_input",' + \
+                         '"Pull Up": "FALSE"' + \
+                        '}]'
+registry_config_str = json.loads(registry_config_str)
+
 
 def drive_low(abort_pin):
     time.sleep(2)
@@ -104,6 +99,29 @@ def drive_high(abort_pin):
 @pytest.fixture()
 def test_configuration():
     test = Interface()
+    # Test configuration input validation.
+    with pytest.raises(ValueError):
+        test.configure({"pin_factory": "random_factory"}, registry_config_str)
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "28"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "test"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "device"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "28", "Device Type": "output",
+                                      "Active High": "None"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "test", "Initial Value": "None"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input",
+                                     "Pull Up": "None"}])
+    with pytest.raises(ValueError):
+        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input",
+                                     "Active High": "None"}])
+    # Test valid configuration.
     test.configure(config_dict, registry_config_str)
     assert test._scrape_all() == {"Solenoid": 0, "flowSensor": 0, "flowLED": 0, "abortButton": 0}
     return test
@@ -117,6 +135,8 @@ def test_registers_get(test_configuration):
 def test_registers_set(test_configuration):
     test_configuration._set_point("Solenoid", "1")
     assert test_configuration.get_point("Solenoid") == 1
+    with pytest.raises(ValueError):
+        test_configuration._set_point("Solenoid", "test")
     test_configuration.pin_factory.reset()
 
 
@@ -152,10 +172,29 @@ def test_output_registers(test_configuration):
         "active_high": "False"
     }
     test_configuration._set_point(point_name, action_dictionary)
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "set_active_high"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "set_active_high",
+            "active_high": "test"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
     action_dictionary = {
         "action": "get_active_high"
     }
     assert not test_configuration._set_point(point_name, action_dictionary)
+
+    # Test invalid action.
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "invalid"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
+
     test_configuration.pin_factory.reset()
 
 
@@ -191,11 +230,31 @@ def test_digital_output_registers(test_configuration):
         "active_high": "False"
     }
     test_configuration._set_point(point_name, action_dictionary)
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "set_active_high"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "set_active_high",
+            "active_high": "test"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
     action_dictionary = {
         "action": "get_active_high"
     }
     assert not test_configuration._set_point(point_name, action_dictionary)
+
+    # Test invalid action.
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "invalid"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
+
     test_configuration.pin_factory.reset()
+
 
 def test_digital_input_registers(test_configuration):
     #Test digital input register
@@ -240,4 +299,11 @@ def test_digital_input_registers(test_configuration):
         "action": "inactive_time"
     }
     assert not test_configuration._set_point(point_name, action_dictionary)
+
+    # Test invalid action.
+    with pytest.raises(ValueError):
+        action_dictionary = {
+            "action": "invalid"
+        }
+        test_configuration._set_point(point_name, action_dictionary)
 
