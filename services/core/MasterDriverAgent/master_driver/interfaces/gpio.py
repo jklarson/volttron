@@ -351,6 +351,7 @@ class DigitalInputRegister(GPIOregister):
         Helper function for performing a callback that publishes to the message bus.
         :return: None
         """
+        _log.debug("\n\n CALLBACK HIT \n\n")
         self.driver.vip.rpc.call('platform.driver', 'forward_bacnet_cov_value', self.driver.driver_path,
                                  self.point_name, {self.point_name: self.device.value})
 
