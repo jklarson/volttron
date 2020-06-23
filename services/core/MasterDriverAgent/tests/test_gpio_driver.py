@@ -41,46 +41,44 @@ import logging
 import threading
 import pytest
 import json
-from  gpiozero.pins.mock import MockFactory
 from services.core.MasterDriverAgent.master_driver.interfaces.gpio import Interface
 
 _log = logging.getLogger(__name__)
 
 # Contents of driver config.
-
 config_dict = {"pin_factory": "mock"}
 
-# Registry CSV Contents:
-#
-# Point Name,Pin,Device Type,Active High,Initial Value,Pull Up,Bounce Time
-# Solenoid,24,output,TRUE,TRUE,,
-# flowSensor,12,digital_input,,,TRUE,
-# flowLED,13,output,TRUE,TRUE,,
-# abortButton,16,digital_input,,,FALSE,
+# Registry config.
+registry_config_str = [{"Point Name": "Solenoid","Pin": 24,"Device Type": "output",
+                        "Active High": "TRUE",
+                        "Initial Value": "TRUE"},
+                       {"Point Name": "flowSensor",
+                        "Pin": 12,
+                        "Device Type": "digital_input",
+                        "Pull Up": "TRUE"},
+                       {"Point Name": "flowLED",
+                        "Pin": 13,
+                        "Device Type": "digital_output",
+                        "Active High": "TRUE",
+                        "Initial Value": "TRUE"},
+                       {"Point Name": "abortButton",
+                        "Pin": 16,
+                        "Device Type": "digital_input",
+                        "Pull Up": "FALSE"}]
 
-registry_config_str = '[{"Point Name": "Solenoid",' + \
-                        '"Pin": 24,' + \
-                        '"Device Type": "output",' + \
-                        '"Active High": "TRUE",' + \
-                        '"Initial Value": "TRUE"' + \
-                        '},' + \
-                        '{"Point Name": "flowSensor",' + \
-                         '"Pin": 12,' + \
-                         '"Device Type": "digital_input",' + \
-                         '"Pull Up": "TRUE"' + \
-                        '},' + \
-                        '{"Point Name": "flowLED",' + \
-                         '"Pin": 13,' + \
-                         '"Device Type": "digital_output",' + \
-                         '"Active High": "TRUE",' + \
-                        '"Initial Value": "TRUE"' + \
-                        '},' + \
-                        '{"Point Name": "abortButton",' + \
-                         '"Pin": 16,' + \
-                         '"Device Type": "digital_input",' + \
-                         '"Pull Up": "FALSE"' + \
-                        '}]'
-registry_config_str = json.loads(registry_config_str)
+# Invalid configurations.
+failing_configs = [({"pin_factory": "random_factory"}, registry_config_str),
+                   (config_dict, [{"Point Name": "test", "Pin": "28"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "test"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "device"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "28", "Device Type": "output",
+                                  "Active High": "None"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "test", "Initial Value": "None"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input",
+                                  "Pull Up": "None"}]),
+                   (config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input",
+                                  "Active High": "None"}])]
 
 
 def drive_low(abort_pin):
@@ -96,35 +94,20 @@ def drive_high(abort_pin):
     time.sleep(2)
     return time.time()
 
+
 @pytest.fixture()
 def test_configuration():
     test = Interface()
-    # Test configuration input validation.
-    with pytest.raises(ValueError):
-        test.configure({"pin_factory": "random_factory"}, registry_config_str)
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "28"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "test"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "device"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "28", "Device Type": "output",
-                                      "Active High": "None"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "test", "Initial Value": "None"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input",
-                                     "Pull Up": "None"}])
-    with pytest.raises(ValueError):
-        test.configure(config_dict, [{"Point Name": "test", "Pin": "5", "Device Type": "digital input",
-                                     "Active High": "None"}])
-    # Test valid configuration.
     test.configure(config_dict, registry_config_str)
     assert test._scrape_all() == {"Solenoid": 0, "flowSensor": 0, "flowLED": 0, "abortButton": 0}
     return test
+
+
+@pytest.mark.parametrize("driv_config, reg_config", failing_configs)
+def test_configuration_failure(driv_config, reg_config):
+    test = Interface()
+    with pytest.raises(ValueError):
+        test.configure(driv_config, reg_config)
 
 
 def test_registers_get(test_configuration):
