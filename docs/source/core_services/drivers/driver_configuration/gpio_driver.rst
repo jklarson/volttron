@@ -1,7 +1,7 @@
 GPIO Driver
 ===========
 
-The GPIO driver is an implementation of a VOLTTRON driver frame work Interface. An instance of a VOLTTRON Interface
+The GPIO driver is an implementation of a VOLTTRON driver framework Interface. An instance of a VOLTTRON Interface
 serves as an interface between the VOLTTRON Master Driver agent and some device. In the case of the GPIO driver, the
 interface is responsible for providing a way for the master driver to communicate with and control GPIO devices. The
 current implementation uses the gpiozero library to communicate with GPIO devices connected to a Raspberry Pi. The GPIO
