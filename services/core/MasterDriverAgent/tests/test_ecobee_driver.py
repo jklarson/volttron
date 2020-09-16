@@ -71,7 +71,7 @@ REMOTE_RESPONSE = {
 
 
 @pytest.fixture(scope="module")
-def query_agent(volttron_instance):
+def query_agent(request, volttron_instance):
     # Start a fake agent to track callbacks
     if PERFORM_INTEGRATION:
         query_agent = volttron_instance.build_agent()
@@ -84,36 +84,70 @@ def query_agent(volttron_instance):
 
         assert volttron_instance.is_agent_running(query_agent.core.agent_uuid)
 
+        def stop():
+            """Stop master driver agent
+            """
+            query_agent.core.stop()
+
+        request.addfinalizer(stop)
+        return master_driver
+
+    return None
+
+
 @pytest.fixture(scope="module")
-def master_driver(volttron_instance, query_agent):
+def master_driver(request, volttron_instance, query_agent):
     # create a master driver
-    master_driver = volttron_instance.install_agent(
-        agent_dir=get_services_core("MasterDriverAgent"),
-        start=False,
-        config_file={
-            "publish_breadth_first_all": False,
-            "publish_depth_first": False,
-            "publish_breadth_first": False
-        })
+    if PERFORM_INTEGRATION:
+        master_driver = volttron_instance.install_agent(
+            agent_dir=get_services_core("MasterDriverAgent"),
+            start=False,
+            config_file={
+                "publish_breadth_first_all": False,
+                "publish_depth_first": False,
+                "publish_breadth_first": False
+            })
 
-    # create driver configurations and
-    driver_config = {
-        "driver_config": {
-            "API_KEY": API_KEY,
-            "DEVICE_ID": DEVICE_ID
+        # create driver configurations and
+        driver_config = {
+            "driver_config": {
+                "API_KEY": API_KEY,
+                "DEVICE_ID": DEVICE_ID
+            }
         }
-    }
-    ecobee_driver_config = jsonapi.load(get_examples("configurations/drivers/ecobee.config"))
-    ecobee_driver_config["interval"] = 3
-    query_agent.vip.rpc.call(CONFIGURATION_STORE, "manage_store", PLATFORM_DRIVER,
-                             "devices/campus/building/test_ecobee", driver_config)
+        ecobee_driver_config = jsonapi.load(get_examples("configurations/drivers/ecobee.config"))
+        # set interval low so that we can get results quickly
+        ecobee_driver_config["interval"] = 3
+        query_agent.vip.rpc.call(CONFIGURATION_STORE, "manage_store", PLATFORM_DRIVER,
+                                 "devices/campus/building/test_ecobee", driver_config)
 
-    with open("configurations/drivers/ecobee.csv") as registry_file:
-        registry_string = registry_file.read()
-    registry_path = re.search("(?!config:\/\/)[a-zA-z]+\.csv", ecobee_driver_config.get("registry_config"))
+        with open("configurations/drivers/ecobee.csv") as registry_file:
+            registry_string = registry_file.read()
+        registry_path = re.search("(?!config:\/\/)[a-zA-z]+\.csv", ecobee_driver_config.get("registry_config"))
 
-    query_agent.vip.rpc.call(CONFIGURATION_STORE, "manage_store", PLATFORM_DRIVER, registry_path, registry_string,
-                             config_type="csv")
+        query_agent.vip.rpc.call(CONFIGURATION_STORE, "manage_store", PLATFORM_DRIVER, registry_path, registry_string,
+                                 config_type="csv")
+
+        # start master driver agent to trigger agent setup
+        volttron_instance.start_agent(master_driver)
+        gevent.wait(1)
+        assert volttron_instance.is_agent_running(master_driver)
+
+        #  Ecobee driver has 60 second start up period for first time configuration
+        print("Ecobee driver requires the user to input PIN from VOLTTRON logs within 60 seconds of startup for "
+              "success.  For more information about authenticating the Ecobee driver, refer to its documentation")
+        gevent.wait(60)
+
+        def stop():
+            """Stop master driver agent
+            """
+            volttron_instance.stop_agent(master_driver)
+
+        request.addfinalizer(stop)
+        return master_driver
+
+    return None
+
 
 class MockEcobee(ecobee.Interface):
 
@@ -171,6 +205,10 @@ class MockEcobee(ecobee.Interface):
 @pytest.fixture()
 def mock_ecobee():
     return MockEcobee()
+
+
+def mock_make_ecobee_request(**args, **kwargs):
+    return True
 
 
 def test_request_tokens(mock_ecobee):
@@ -592,11 +630,83 @@ def test_scrape_all_trigger_refresh(mock_ecobee):
     assert result == all_scrape
 
 
-# TODO currently building agents times out
+# TODO unit tests for set point
+@mock.patch(ecobee, "make_ecobee_request", mock_make_ecobee_request)
+def test_set_point_success():
+    mock_ecobee.configure(VALID_ECOBEE_CONFIG, VALID_ECOBEE_REGISTRY)
+    mock_ecobee._set_point("testHold")
+    # TODO
+    assert False
+
+
+def test_set_point_failure():
+    # test expected failures in interface class
+    # TODO
+    assert False
+
+
+def test_set_point_setting_register():
+    # TODO
+    assert False
+
+
+def test_set_point_hold_register():
+    # TODO
+    assert False
+
+
+def test_set_point_vacation_register():
+    # TODO
+    assert False
+
+
+def test_set_point_program_register():
+    # TODO
+    assert False
+
+
+def test_set_point_status_register():
+    # TODO
+    assert False
+
+
 @pytest.mark.skipif(not PERFORM_INTEGRATION, reason="ECOBEE_KEY (Ecobee API key) or DEVICE_ID (Ecobee thermostat serial"
                                                     " number) not found in environment variables during test. These "
                                                     "values are required to run integration tests.")
-def test_ecobee_driver(volttron_instance):
-    pass
+def test_ecobee_get_data(volttron_instance, query_agent, master_driver):
+    # set get data request and parse through response
+    # TODO
+    assert False
+
 
 # TODO integration tests for set point registers
+def test_set_point():
+    # TODO fetch original set point for later use
+
+    # request set point
+
+    # handle response and get latest data
+
+    # check a get data request to see if the set point is updated
+
+    # reset to previous set point
+    pass
+
+
+# TODO currently building agents times out
+@pytest.mark.dev
+@pytest.mark.skipif(not PERFORM_INTEGRATION, reason="ECOBEE_KEY (Ecobee API key) or DEVICE_ID (Ecobee thermostat serial"
+                                                    " number) not found in environment variables during test. These "
+                                                    "values are required to run integration tests.")
+def test_ecobee_driver_poll(volttron_instance, query_agent, master_driver):
+    assert volttron_instance.is_agent_running(master_driver)
+    # reset mock so that we can start clean
+    query_agent.poll_callback.reset_mock()
+    # then wait for the driver's publishing interval
+    gevent.wait(3)
+
+    # then check the mock was called and check driver data structure
+    assert query_agent.poll_callback.call_count >= 1
+    for args in query_agent.poll_callback.call_args:
+        # TODO parse through response args
+        pass
