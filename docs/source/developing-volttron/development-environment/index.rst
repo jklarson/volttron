@@ -9,6 +9,6 @@ machine on which an IDE would be running.  The guides can be used to set up a de
 
 .. toctree::
 
-   fork-repository
    virtual_machine/install-vm
+   fork-repository
    pycharm/index

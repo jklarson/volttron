@@ -483,7 +483,7 @@ You can also use the `volttron-ctl` (or `vctl`) command to start, stop or check 
 .. note::
 
     The default working directory is ~/.volttron. The default directory for creation of agent packages is
-    `~/.volttron/packaged`
+    `~/.volttron/agents`
 
 
 Next Steps
@@ -495,4 +495,4 @@ platform:
 *   :ref:`Agent Framework <Agent-Framework>`
 *   :ref:`Driver Framework <Driver-Framework>`
 *   Demonstration of the :ref:`management UI <Device-Configuration-in-VOLTTRON-Central>`
-*   :ref:`RabbitMQ setup <RabbitMQ-Overview>` with Federation and Shovel plugins
+*   :ref:`RabbitMQ setup <Multi-platform-RabbitMQ-Deployment>` with Federation and Shovel plugins

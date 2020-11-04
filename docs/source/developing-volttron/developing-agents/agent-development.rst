@@ -529,6 +529,7 @@ To unsubscribe from a topic, the `self.vip.pubsub.unsubscribe` can be used:
 Giving ``None`` as values for the prefix and callback argument will unsubscribe from everything on that bus.  This is
 handy for subscriptions that must be updated base on a configuration setting.
 
+
 Heartbeat
 ^^^^^^^^^
 
@@ -549,6 +550,16 @@ Subscribing to the heartbeat topic:
                               prefix='heartbeat',
                               callback=handle_heartbeat)
 
+Available Heartbeat Methods
+"""""""""""""""""""""""""""
+
+- **start()** - start heartbeat signal with the set previously set period or with default if not previously set
+- **start_with_period(period)** - start the heartbeat signal publishing on the specified interval in seconds
+- **stop()** - stop heartbeat publishes
+- **restart()** - restart the heartbeat signal with the previously set period
+- **set_period(period)** - set the interval in seconds between heartbeat publishes
+- **publish()** - publish a heartbeat message to the heartbeat topic for the agent
+
 
 Health
 ^^^^^^
@@ -565,6 +576,54 @@ Example of setting health:
     from volttron.platform.messaging.health import STATUS_BAD, STATUS_GOOD,
 
     self.vip.health.set_status(STATUS_GOOD, "Configuration of agent successful")
+
+After setting the health status for the agent, the agent may publish an alert to the bus using the `send_alert` method:
+
+.. code-block::
+
+    status = Status.from_json(self.vip.health.get_status_json())
+    self.vip.health.send_alert(CACHE_READ_ERROR, status)
+
+Available Health Methods
+""""""""""""""""""""""""
+
+- **send_alert(alert_key, statusobj)** - Publishes an alert message to the message bus containing the agent's
+  current status
+- **add_status_callback(fn)** - Enables a function to be triggered on callback when the status of the agent
+  changes
+- **set_status(status, context=None)** - Updates the agents status to the new value with the specified context
+- **get_status()** - Returns the last updated status from the object with the context.
+- **get_status_value()** - obtain status value from status object
+- **get_status_json()** - get a JSON representation of the agent's status object
+- **publish()** - publish a health message to the heartbeat topic for the agent
+
+
+Peerlist
+^^^^^^^^
+
+The peerlist subsystem is responsible for reporting on agents currently connected to the platform.  As agents connect
+and disconnect, the peerlist is notified of the change and can be queried to show the current state.
+
+.. code-block::
+
+    self.vip.peerlist.list()
+
+.. note::
+
+    Additional metadata for the connected message bus can be found using the `list_with_messagebus` method:
+
+    .. code-block::
+
+        self.vip.peerlist.list_with_messagebus()
+
+Available Peerlist Methods
+""""""""""""""""""""""""""
+
+- **list()** - list all peer agents currently connected to the message bus
+- **add_peer(peer, message_bus=None)** - connect a peer agent to the message bus
+- **drop_peer(peer, message_bus=None)** - close the peer agent's connection to the message bus
+- **list_with_messagebus()** - list all peer agents current connected to the message bus and include an extra entry
+  specifying the message bus implementation currently being used to run the platform.
 
 
 Remote Procedure Calls
@@ -639,7 +698,7 @@ information to name the resulting file.
 Launch Configuration
 ====================
 
-In TestAgent, the wizard will automatically create a JSON file called "config". It contains configuration information
+In `TestAgent`, the wizard will automatically create a JSON file called `config`. It contains configuration information
 for the agent.  This file contains examples of every data type supported by the configuration system:
 
 ::
@@ -683,24 +742,24 @@ To verify it has been installed, use the following command:
 
 .. code-block:: bash
 
-    vctl list
+    vctl status
 
 This will result in output similar to the following:
 
 .. code-block:: bash
 
-      AGENT                    IDENTITY           TAG        Status     Health      PRI
-  df  testeragent-0.5          testeragent-0.5_1  testagent
+      AGENT                    IDENTITY           TAG        STATUS     HEALTH
+   f  testeragent-0.5          testeragent-0.5_1  testagent
 
 * The first string is a unique portion of the full UUID for the agent
-* AGENT is the "name" of the agent based on the contents of its class name and the version in its setup.py.
+* AGENT is the "name" of the agent based on the contents of its class name and the version in its `setup.py`.
 * IDENTITY is the agent's identity in the platform. This is automatically assigned based on class name and instance
-  number. This agent's ID is _1 because it is the first instance.
+  number. This agent's ID is ``_1`` because it is the first instance.
 * TAG is the name we assigned in the command above
 * Status indicates the running status of an agent - running agents are *running*, agents which are not running will have
   no listed status
-* Health is an indication of the internal state of the agent.  'Healthy' agents will have GOOD health.  If an agent
-  enters an error state, it will continue to run, but its health will be BAD.
+* Health is an indication of the internal state of the agent.  'Healthy' agents will have ``GOOD`` health.  If an agent
+  enters an error state, it will continue to run, but its health will be ``BAD``.
 * PRI is the priority for agents which have been "enabled" using the ``vctl enable`` command.
 
 When using lifecycle commands on agents, they can be referred to by the UUID (default) or AGENT (name) or TAG.

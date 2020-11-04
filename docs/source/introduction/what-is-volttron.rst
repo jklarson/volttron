@@ -13,9 +13,10 @@ a vast variety of tasks.
 Design Philosophy
 =================
 
-VOLTTRON was designed by Pacific Northwest National Laboratory to service building efficiency, building-grid integration
-and transactive controls systems. These systems are working to improve energy efficiency and resiliency in critical
-infrastructure. To this end, VOLTTRON was built with the following pillars in mind:
+VOLTTRON was designed by Pacific Northwest National Laboratory and funded by Department Of Energy to service building
+efficiency, building-grid integration and transactive controls systems.  These systems are working to improve energy
+efficiency and resiliency in critical infrastructure.  To this end, VOLTTRON was built with the following pillars in
+mind:
 
  * Cost-Effectiveness -  Open source software (free to users) and can be hosted on inexpensive computing resources
  * Scalability - Can be used in one building or a fleet of buildings
