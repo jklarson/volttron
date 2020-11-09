@@ -54,26 +54,34 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
     def __init__(self, connect_params, table_names, archive_period, archive_period_units):
         super(SqlLiteFuncts, self).__init__(connect_params, table_names)
         archive_period = int(archive_period)
+        # validate archive period units
         if archive_period_units not in ['m', 'd', 'w', 'h', 'M']:
             raise ValueError("Archive period units must be m (months), d (days), w (weeks), h (hours), M (minutes)")
         else:
             self.archive_period_units = archive_period_units
+        # convert weeks to a number of days usable in timedelta
         if self.archive_period_units == 'w':
             archive_period = archive_period * 7
             self.archive_period_units = 'd'
+        # relative delta can be used to deal with months of variant durations (February 29 days, etc.)
         if self.archive_period_units == 'm':
             self.archive_period = relativedelta(months=+6)
+        # Otherwise create a typical time delta with quantity 'archive period' and length 'archive_period_units'
         elif self.archive_period_units == 'd':
             self.archive_period = datetime.timedelta(days=archive_period)
         elif archive_period_units == 'h':
             self.archive_period = datetime.timedelta(hours=archive_period)
         else:
             self.archive_period = datetime.timedelta(minutes=archive_period)
-        self.next_archive_time = datetime.datetime.now() + self.archive_period
+        self.next_archive_time = None
+        self.set_next_archive_time()
 
     def manage_db_size(self, history_limit_timestamp, storage_limit_gb):
         """
-
+        Override "SQLiteFuncts" class "manage_db_size" method.
+        New behavior:  Check if the time period since the last db file was created has passed the configured threshold.
+        If so, close the database connection, rename the existing database with a timestamp based on the archive period,
+        and create a connection to a new database.
         """
         # close the current connection and move the database using the rollover name
         if datetime.datetime.now() > self.next_archive_time:
@@ -81,15 +89,23 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
             self.close()
             # move the database file that was created
             os.rename(self.__database, self.get_archive_db_path())
-            # then reset the connnection (build a new database)
+            # then reset the connection (build a new database)
             self.cursor()
+            # update the schedule
+            self.set_next_archive_time()
         else:
+            # TODO what should happen here? probably nothing
+            pass
 
-
+    def set_next_archive_time(self):
+        """
+        Helper method to update the next time that the existing database should be archived and a new database created
+        """
+        self.next_archive_time = datetime.datetime.now() + self.archive_period
 
     def get_archive_timestamp_format(self):
         """
-        :returns: Datetime formatting string for archive database names
+        :returns: Datetime formatting string for archive database names based on the configured archive period units
         """
         if self.archive_period_units == 'm':
             return "%m-%Y"
@@ -104,7 +120,7 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
 
     def get_archive_db_path(self):
         """
-        :returns: Full path for the next archive database file
+        :returns: Full path for the next archive database file based on the current time and archive period units
         """
         db_dir, db_name = self.__database.rsplit(".")
         db_prefix, db_suffix = db_name.rsplit(".")

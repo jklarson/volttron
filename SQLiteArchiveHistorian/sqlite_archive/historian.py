@@ -1,31 +1,57 @@
-"""
-Agent documentation goes here.
-"""
+# -*- coding: utf-8 -*- {{{
+# vim: set fenc=utf-8 ft=python sw=4 ts=4 sts=4 et:
+#
+# Copyright 2019, Battelle Memorial Institute.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# This material was prepared as an account of work sponsored by an agency of
+# the United States Government. Neither the United States Government nor the
+# United States Department of Energy, nor Battelle, nor any of their
+# employees, nor any jurisdiction or organization that has cooperated in the
+# development of these materials, makes any warranty, express or
+# implied, or assumes any legal liability or responsibility for the accuracy,
+# completeness, or usefulness or any information, apparatus, product,
+# software, or process disclosed, or represents that its use would not infringe
+# privately owned rights. Reference herein to any specific commercial product,
+# process, or service by trade name, trademark, manufacturer, or otherwise
+# does not necessarily constitute or imply its endorsement, recommendation, or
+# favoring by the United States Government or any agency thereof, or
+# Battelle Memorial Institute. The views and opinions of authors expressed
+# herein do not necessarily state or reflect those of the
+# United States Government or any agency thereof.
+#
+# PACIFIC NORTHWEST NATIONAL LABORATORY operated by
+# BATTELLE for the UNITED STATES DEPARTMENT OF ENERGY
+# under Contract DE-AC05-76RL01830
+# }}}
 
-__docformat__ = 'reStructuredText'
 
 import logging
 import sys
-from services.core.SQLHistorian.sqlhistorian.historian import historian, SQLHistorian
+from services.core.SQLHistorian.sqlhistorian.historian import SQLHistorian, MaskedString
 from SQLiteArchiveHistorian.sqlite_archive.sqlitefuncts_archiver import SQLiteArchiverFuncts
 from volttron.platform.agent import utils
-from volttron.platform.vip.agent import Agent, Core, RPC
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
 __version__ = "0.1"
 
-class MaskedString(str):
-    def __repr__(self):
-        return repr('********')
-
 
 def sqlite_archive(config_path, **kwargs):
-    """Parses the Agent configuration and returns an instance of
+    """Parses the SQLiteArchiveHistorian agent configuration and returns an instance of
     the agent created using that configuration.
-
     :param config_path: Path to a configuration file.
-
     :type config_path: str
     :returns: SqliteArchive
     :rtype: SqliteArchive
@@ -52,6 +78,7 @@ def sqlite_archive(config_path, **kwargs):
     return SqliteArchiveHistorian(**kwargs)
 
 
+# TODO are there other methods to override, or additional/different configuration to do
 class SqliteArchiveHistorian(SQLHistorian):
     """
     Document agent constructor here.
@@ -75,78 +102,10 @@ class SqliteArchiveHistorian(SQLHistorian):
         self.bg_thread_dbutils = None
         super(SQLHistorian, self).__init__(**kwargs)
 
-    def configure(self, config_name, action, contents):
-        """
-        Called after the Agent has connected to the message bus. If a configuration exists at startup
-        this will be called before onstart.
-
-        Is called every time the configuration in the store changes.
-        """
-        config = self.default_config.copy()
-        config.update(contents)
-
-        _log.debug("Configuring Agent")
-
-        try:
-            setting1 = int(config["setting1"])
-            setting2 = str(config["setting2"])
-        except ValueError as e:
-            _log.error("ERROR PROCESSING CONFIGURATION: {}".format(e))
-            return
-
-        self.setting1 = setting1
-        self.setting2 = setting2
-
-        self._create_subscriptions(self.setting2)
-
-    def _create_subscriptions(self, topic):
-        #Unsubscribe from everything.
-        self.vip.pubsub.unsubscribe("pubsub", None, None)
-
-        self.vip.pubsub.subscribe(peer='pubsub',
-                                  prefix=topic,
-                                  callback=self._handle_publish)
-
-    def _handle_publish(self, peer, sender, bus, topic, headers,
-                                message):
-        pass
-
-    @Core.receiver("onstart")
-    def onstart(self, sender, **kwargs):
-        """
-        This is method is called once the Agent has successfully connected to the platform.
-        This is a good place to setup subscriptions if they are not dynamic or
-        do any other startup activities that require a connection to the message bus.
-        Called after any configurations methods that are called at startup.
-
-        Usually not needed if using the configuration store.
-        """
-        #Example publish to pubsub
-        #self.vip.pubsub.publish('pubsub', "some/random/topic", message="HI!")
-
-        #Exmaple RPC call
-        #self.vip.rpc.call("some_agent", "some_method", arg1, arg2)
-
-    @Core.receiver("onstop")
-    def onstop(self, sender, **kwargs):
-        """
-        This method is called when the Agent is about to shutdown, but before it disconnects from
-        the message bus.
-        """
-        pass
-
-    @RPC.export
-    def rpc_method(self, arg1, arg2, kwarg1=None, kwarg2=None):
-        """
-        RPC method
-
-        May be called from another agent via self.core.rpc.call """
-        return self.setting1 + arg1 - arg2
 
 def main():
     """Main method called to start the agent."""
-    utils.vip_main(sqlite_archive, 
-                   version=__version__)
+    utils.vip_main(sqlite_archive, version=__version__)
 
 
 if __name__ == '__main__':
