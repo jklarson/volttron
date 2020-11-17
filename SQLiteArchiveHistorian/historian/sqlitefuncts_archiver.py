@@ -37,9 +37,15 @@
 # }}}
 
 import datetime
+import logging
 import os
 from dateutil.relativedelta import relativedelta
+from volttron.platform.agent import utils
 from volttron.platform.dbutils.sqlitefuncts import SqlLiteFuncts
+
+utils.setup_logging()
+_log = logging.getLogger(__name__)
+
 
 class SQLiteArchiverFuncts(SqlLiteFuncts):
     """
@@ -51,9 +57,12 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
     :py:class:`volttron.platform.dbutils.basedb.DbDriver`
     """
 
-    def __init__(self, connect_params, table_names, archive_period, archive_period_units):
-        super(SqlLiteFuncts, self).__init__(connect_params, table_names)
+    def __init__(self, connect_params, table_names, archive_period=7, archive_period_units='d'):
+        super(SQLiteArchiverFuncts, self).__init__(connect_params, table_names)
+        self._database_name = connect_params.get("database")
         archive_period = int(archive_period)
+        if archive_period < 1:
+            raise ValueError("Archive period must be a positive whole number value")
         # validate archive period units
         if archive_period_units not in ['m', 'd', 'w', 'h', 'M']:
             raise ValueError("Archive period units must be m (months), d (days), w (weeks), h (hours), M (minutes)")
@@ -65,7 +74,7 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
             self.archive_period_units = 'd'
         # relative delta can be used to deal with months of variant durations (February 29 days, etc.)
         if self.archive_period_units == 'm':
-            self.archive_period = relativedelta(months=+6)
+            self.archive_period = relativedelta(months=+archive_period)
         # Otherwise create a typical time delta with quantity 'archive period' and length 'archive_period_units'
         elif self.archive_period_units == 'd':
             self.archive_period = datetime.timedelta(days=archive_period)
@@ -88,20 +97,24 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
             # Close the current database connection
             self.close()
             # move the database file that was created
-            os.rename(self.__database, self.get_archive_db_path())
+            os.rename(self._database_name, self.get_archive_db_path())
             # then reset the connection (build a new database)
             self.cursor()
+            self.setup_historian_tables()
             # update the schedule
             self.set_next_archive_time()
-        else:
-            # TODO what should happen here? probably nothing
-            pass
 
     def set_next_archive_time(self):
         """
         Helper method to update the next time that the existing database should be archived and a new database created
         """
+        if not self.next_archive_time:
+            if os.path.exists(self._database_name):
+                created = os.path.getctime(self._database_name)
+                self.next_archive_time = datetime.datetime.fromtimestamp(created) + self.archive_period
+                return
         self.next_archive_time = datetime.datetime.now() + self.archive_period
+        _log.info(f"Next archive time for the SQLiteArchiveHistorian: {self.next_archive_time}")
 
     def get_archive_timestamp_format(self):
         """
@@ -122,8 +135,7 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
         """
         :returns: Full path for the next archive database file based on the current time and archive period units
         """
-        db_dir, db_name = self.__database.rsplit(".")
-        db_prefix, db_suffix = db_name.rsplit(".")
+        db_path, extension = self._database_name.rsplit(".", 1)
         archive_db_timestamp = datetime.datetime.now().strftime(self.get_archive_timestamp_format())
-        archive_db_name = ".".join([db_prefix, f'{archive_db_timestamp}', db_suffix])
-        return os.path.join(db_dir, archive_db_name)
+        archive_db_name = ".".join([db_path, archive_db_timestamp, extension])
+        return archive_db_name

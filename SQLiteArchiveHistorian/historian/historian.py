@@ -39,13 +39,16 @@
 
 import logging
 import sys
-from services.core.SQLHistorian.sqlhistorian.historian import SQLHistorian, MaskedString
-from SQLiteArchiveHistorian.sqlite_archive.sqlitefuncts_archiver import SQLiteArchiverFuncts
+import threading
+from services.core.SQLHistorian.sqlhistorian.historian import MaskedString
+from SQLiteArchiveHistorian.historian.sqlitefuncts_archiver import SQLiteArchiverFuncts
 from volttron.platform.agent import utils
+from volttron.platform.agent.base_historian import BaseHistorian
+from volttron.utils.docs import doc_inherit
 
 _log = logging.getLogger(__name__)
 utils.setup_logging()
-__version__ = "0.1"
+__version__ = "1.0"
 
 
 def sqlite_archive(config_path, **kwargs):
@@ -78,29 +81,76 @@ def sqlite_archive(config_path, **kwargs):
     return SqliteArchiveHistorian(**kwargs)
 
 
-# TODO are there other methods to override, or additional/different configuration to do
-class SqliteArchiveHistorian(SQLHistorian):
+class SqliteArchiveHistorian(BaseHistorian):
     """
     Document agent constructor here.
     """
+
+    def version(self):
+        return __version__
 
     def __init__(self, connection, tables_def=None, archive_period="", **kwargs):
         self.connection = connection
         self.tables_def, self.table_names = self.parse_table_def(tables_def)
         self.archive_period_units = archive_period[-1:]
         self.archive_period = int(archive_period[:-1])
-        # Create two instance so connection is shared within a single thread.
-        # This is because sqlite only supports sharing of connection within
-        # a single thread.
-        # historian_setup and publish_to_historian happens in background thread
-        # everything else happens in the MainThread
 
-        # One utils class instance( hence one db connection) for main thread
-        self.main_thread_dbutils = SQLiteArchiverFuncts(self.connection['params'], self.table_names)
-        # One utils class instance( hence one db connection) for main thread
-        # this gets initialized in the bg_thread within historian_setup
+        self.topic_id_map = {}
+        self.topic_name_map = {}
+        self.topic_meta = {}
+        self.agg_topic_id_map = {}
+
+        # As the ArchiveHistorian is not queryable, a "main thread" is not required
         self.bg_thread_dbutils = None
-        super(SQLHistorian, self).__init__(**kwargs)
+        super(SqliteArchiveHistorian, self).__init__(**kwargs)
+
+    @doc_inherit
+    def historian_setup(self):
+        thread_name = threading.currentThread().getName()
+        _log.debug("historian_setup on Thread: {}".format(thread_name))
+        self.bg_thread_dbutils = SQLiteArchiverFuncts(self.connection['params'],
+                                                      self.table_names,
+                                                      self.archive_period,
+                                                      self.archive_period_units)
+
+        if not self._readonly:
+            self.bg_thread_dbutils.setup_historian_tables()
+
+        topic_id_map, topic_name_map = self.bg_thread_dbutils.get_topic_map()
+        self.topic_id_map.update(topic_id_map)
+        self.topic_name_map.update(topic_name_map)
+        self.agg_topic_id_map = self.bg_thread_dbutils.get_agg_topic_map()
+
+    def query_topic_list(self):
+        """
+        Unimplemented method stub.
+        """
+        raise NotImplementedError()
+
+    def query_topics_by_pattern(self, topic_pattern):
+        """
+        Unimplemented method stub.
+        """
+        raise NotImplementedError()
+
+    def query_topics_metadata(self, topics):
+        """
+        Unimplemented method stub.
+        """
+        raise NotImplementedError()
+
+    def query_aggregate_topics(self):
+        """
+        Unimplemented method stub.
+        """
+        raise NotImplementedError()
+
+    def query_historian(self, topic, start=None, end=None, agg_type=None, agg_period=None, skip=0, count=None,
+                        order="FIRST_TO_LAST"):
+        """
+        Unimplemented method stub.
+        """
+        raise NotImplementedError()
 
 
 def main():

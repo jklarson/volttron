@@ -8,5 +8,6 @@
             "database": "historian_test.sqlite"
         }
     },
+    "archive_period": '24h',
     "all_platforms":true
 }

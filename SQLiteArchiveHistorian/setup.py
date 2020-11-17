@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
-MAIN_MODULE = 'agent'
+MAIN_MODULE = 'historian'
 
 # Find the agent package that contains the main module
 packages = find_packages('.')
-agent_package = 'sqlite_archive'
+agent_package = 'historian'
 
 # Find the version number from the main module
 agent_module = agent_package + '.' + MAIN_MODULE

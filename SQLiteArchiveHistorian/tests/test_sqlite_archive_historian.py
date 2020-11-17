@@ -40,13 +40,29 @@
 import pytest
 import sqlite3
 from datetime import datetime, timedelta
+from mock import MagicMock
+
+
+@pytest.fixture(scope="module")
+def query_agent(request, volttron_instance):
+    # 1: Start a fake agent to query the historian agent in volttron_instance2
+    agent = volttron_instance.build_agent()
+    agent.poll_callback = MagicMock(name="poll_callback")
+    # subscribe to weather poll results
+    agent.vip.pubsub.subscribe(
+        peer='pubsub',
+        prefix="devices",
+        callback=agent.poll_callback).get()
+
+    # 2: add a tear down method to stop the fake
+    # agent that published to message bus
+    def stop_agent():
+        print("In teardown method of query_agent")
+        agent.core.stop()
+
+    request.addfinalizer(stop_agent)
+    return agent
 
 
 def test_manage_db_size_success():
-    # TODO use Mock agent
-    # TODO instantiate the agent class
-    # TODO Check the file name and archive units/period and next update timestamp setup in init
-    # TODO set the next update to a time that would trigger the archive
-    # TODO run manage_db_size()
-    # TODO check db new db file exists, old file exists w/timestamp, next update period is updated
     pass
