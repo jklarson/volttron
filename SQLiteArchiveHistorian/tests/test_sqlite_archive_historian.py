@@ -118,6 +118,15 @@ def archive_historian(request, volttron_instance):
     return archive_historian
 
 
+# TODO "copy" tests for other methods into here
+
 def test_manage_db_size_success(query_agent, master_driver, archive_historian):
-    # TODO do a thing
+    # reset query agent mock
+    # wait 60 seconds (so that the database will rollover the minimal amount of time
+    # check the rollover db was created
+    # check new db is created
+    # check rollover db and mock are the same
+    # check new db does not have the same data
     pass
+
+# TODO db size fail?
