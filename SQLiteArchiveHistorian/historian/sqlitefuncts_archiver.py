@@ -120,13 +120,13 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
         """
         :returns: Datetime formatting string for archive database names based on the configured archive period units
         """
-        if self.archive_period_units == 'm':
+        if self.archive_period_units == 'M':
             return "%m-%Y"
         elif self.archive_period_units == 'd':
             return "%m-%d-%Y"
         elif self.archive_period_units == 'h':
             return "%m-%d-%Y_%H"
-        elif self.archive_period_units == 'M':
+        elif self.archive_period_units == 'm':
             return "%m-%d-%Y_%H_%M"
         else:
             raise ValueError(f'Specified units for rollover DB not supported: {self.archive_period_units}')
