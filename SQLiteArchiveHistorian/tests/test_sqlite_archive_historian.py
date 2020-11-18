@@ -37,25 +37,26 @@
 # }}}
 
 
+import gevent
 import pytest
+import re
 import sqlite3
 from datetime import datetime, timedelta
 from mock import MagicMock
 
+from volttron.platform import jsonapi, get_examples, get_services_core
+from volttron.platform.agent.known_identities import CONFIGURATION_STORE, PLATFORM_DRIVER
+
 
 @pytest.fixture(scope="module")
 def query_agent(request, volttron_instance):
-    # 1: Start a fake agent to query the historian agent in volttron_instance2
+    # Start a fake agent to query the historian agent
     agent = volttron_instance.build_agent()
     agent.poll_callback = MagicMock(name="poll_callback")
-    # subscribe to weather poll results
-    agent.vip.pubsub.subscribe(
-        peer='pubsub',
-        prefix="devices",
-        callback=agent.poll_callback).get()
+    # subscribe to devices topics
+    agent.vip.pubsub.subscribe(peer='pubsub', prefix="devices", callback=agent.poll_callback).get()
 
-    # 2: add a tear down method to stop the fake
-    # agent that published to message bus
+    # 2: add a tear down method to stop the fake agent that published to message bus
     def stop_agent():
         print("In teardown method of query_agent")
         agent.core.stop()
@@ -64,5 +65,59 @@ def query_agent(request, volttron_instance):
     return agent
 
 
-def test_manage_db_size_success():
+@pytest.fixture(scope="module")
+def master_driver(request, volttron_instance, query_agent):
+    master_driver = volttron_instance.install_agent(
+        agent_dir=get_services_core("MasterDriverAgent"),
+        start=False,
+        config_file={
+            "publish_breadth_first_all": False,
+            "publish_depth_first": False,
+            "publish_breadth_first": False
+        })
+
+    driver_config = jsonapi.load(open(get_examples("configurations/drivers/fake.config")))
+    with open("configurations/drivers/fake.csv") as registry_file:
+        registry_string = registry_file.read()
+    registry_path = re.search("(?!config:\/\/)[a-zA-z]+\.csv", driver_config.get("registry_config"))
+
+    query_agent.vip.rpc.call(CONFIGURATION_STORE, "manage_store", PLATFORM_DRIVER, "devices/campus/building/fake",
+                             driver_config)
+    query_agent.vip.rpc.call(CONFIGURATION_STORE, "manage_store", PLATFORM_DRIVER, registry_path, registry_string,
+                             config_type="csv")
+    volttron_instance.start_agent(master_driver)
+    gevent.wait(1)
+    assert volttron_instance.is_agent_running(master_driver)
+
+    def stop():
+        """Stop master driver agent
+        """
+        volttron_instance.stop_agent(master_driver)
+
+    request.addfinalizer(stop)
+    return master_driver
+
+
+@pytest.fixture(scope="module")
+def archive_historian(request, volttron_instance):
+    # install a copy of the archive historian using the default config
+    config = jsonapi.load(open("SQLiteHistorian/config", "r"))
+    archive_historian = volttron_instance.install_agent(
+        agent_dir="SQLiteArchiveHistorian",
+        start=True,
+        config_file=config)
+    gevent.wait(1)
+    assert volttron_instance.is_agent_running(master_driver)
+
+    def stop():
+        # stop running the agent
+        volttron_instance.stop_agent(archive_historian)
+
+    request.addfinalizer(stop)
+
+    return archive_historian
+
+
+def test_manage_db_size_success(query_agent, master_driver, archive_historian):
+    # TODO do a thing
     pass
