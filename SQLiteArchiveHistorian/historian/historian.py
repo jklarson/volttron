@@ -121,6 +121,74 @@ class SqliteArchiveHistorian(BaseHistorian):
         self.topic_name_map.update(topic_name_map)
         self.agg_topic_id_map = self.bg_thread_dbutils.get_agg_topic_map()
 
+    def record_table_definitions(self, meta_table_name):
+        self.bg_thread_dbutils.record_table_definitions(self.tables_def, meta_table_name)
+
+    def manage_db_size(self, history_limit_timestamp, storage_limit_gb):
+        """
+        Optional function to manage database size.
+        """
+        self.bg_thread_dbutils.manage_db_size(history_limit_timestamp, storage_limit_gb)
+
+    @doc_inherit
+    def publish_to_historian(self, to_publish_list):
+        try:
+            published = 0
+            with self.bg_thread_dbutils.bulk_insert() as insert_data:
+                for x in to_publish_list:
+                    ts = x['timestamp']
+                    topic = x['topic']
+                    value = x['value']
+                    meta = x['meta']
+
+                    # look at the topics that are stored in the database already to see if this topic has a value
+                    lowercase_name = topic.lower()
+                    topic_id = self.topic_id_map.get(lowercase_name, None)
+                    db_topic_name = self.topic_name_map.get(lowercase_name,
+                                                            None)
+                    if topic_id is None:
+                        # _log.debug('Inserting topic: {}'.format(topic))
+                        # Insert topic name as is in db
+                        topic_id = self.bg_thread_dbutils.insert_topic(topic)
+                        # user lower case topic name when storing in map for case insensitive comparison
+                        self.topic_id_map[lowercase_name] = topic_id
+                        self.topic_name_map[lowercase_name] = topic
+                    elif db_topic_name != topic:
+                        self.bg_thread_dbutils.update_topic(topic, topic_id)
+                        self.topic_name_map[lowercase_name] = topic
+
+                    old_meta = self.topic_meta.get(topic_id, {})
+                    if set(old_meta.items()) != set(meta.items()):
+                        self.bg_thread_dbutils.insert_meta(topic_id, meta)
+                        self.topic_meta[topic_id] = meta
+
+                    if insert_data(ts, topic_id, value):
+                        published += 1
+
+            if published:
+                if self.bg_thread_dbutils.commit():
+                    self.report_all_handled()
+                else:
+                    _log.debug('Commit error. Rolling back {} values.'.format(published))
+                    self.bg_thread_dbutils.rollback()
+            else:
+                _log.debug('Unable to publish {}'.format(len(to_publish_list)))
+        except Exception as e:
+            # TODO Unable to send alert from here
+            # if isinstance(e, ConnectionError):
+            #     _log.debug("Sending alert. Exception {}".format(e.args))
+            #     err_message = "Unable to connect to database. Exception:{}".format(e.args)
+            #     alert_id = DB_CONNECTION_FAILURE
+            # else:
+            #     err_message = "Unknown exception when publishing data. Exception: {}".format(e.args)
+            #     alert_id = ERROR_PUBLISHING_DATA
+            # self.vip.health.set_status(STATUS_BAD, err_message)
+            # status = Status.from_json(self.vip.health.get_status())
+            # self.vip.health.send_alert(alert_id, status)
+            self.bg_thread_dbutils.rollback()
+            # Raise to the platform so it is logged properly.
+            raise
+
     def query_topic_list(self):
         """
         Unimplemented method stub.

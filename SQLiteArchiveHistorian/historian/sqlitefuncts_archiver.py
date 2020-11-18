@@ -73,7 +73,7 @@ class SQLiteArchiverFuncts(SqlLiteFuncts):
             archive_period = archive_period * 7
             self.archive_period_units = 'd'
         # relative delta can be used to deal with months of variant durations (February 29 days, etc.)
-        if self.archive_period_units == 'm':
+        if self.archive_period_units == 'M':
             self.archive_period = relativedelta(months=+archive_period)
         # Otherwise create a typical time delta with quantity 'archive period' and length 'archive_period_units'
         elif self.archive_period_units == 'd':
